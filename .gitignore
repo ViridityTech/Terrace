@@ -1,0 +1,8 @@
+venv/
+forecast_results/
+forecast_visuals/
+
+all_leads_data.csv
+leads_by_location_date.csv
+canopy-partners-1694182485037-7bfbae121986.json
+.cursorignore
