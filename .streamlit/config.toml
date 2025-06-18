@@ -1,0 +1,17 @@
+[server]
+port = 8503
+address = "0.0.0.0"
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#ff6347"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730" 
