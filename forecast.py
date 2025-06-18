@@ -12,10 +12,10 @@ def prepare_data(df):
     df['month'] = df['day_created'].dt.to_period('M')
     
     # Group by location and month and ensure integer counts
-    monthly_data = df.groupby(['Media_Location_Text__c', 'month'])['lead_count'].sum().round().astype(int).reset_index()
+    monthly_data = df.groupby(['Media_Location_Text__c', 'month'])['Leads'].sum().round().astype(int).reset_index()
     
     # Ensure all values are positive integers
-    monthly_data['lead_count'] = monthly_data['lead_count'].clip(lower=0)
+    monthly_data['Leads'] = monthly_data['Leads'].clip(lower=0)
     
     # Sort by month
     monthly_data.sort_values(['Media_Location_Text__c', 'month'], inplace=True)
@@ -57,10 +57,10 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
             
         print(f"\nForecasting for location: {location}")
         
-        # Filter data for this location up to and including prediction month
+        # Filter data for this location up to but NOT including prediction month
         location_data = df_monthly[
             (df_monthly['Media_Location_Text__c'] == location) &
-            (df_monthly['month'] <= prediction_month)
+            (df_monthly['month'] < prediction_month)  # Changed from <= to <
         ].copy()
         
         if len(location_data) < 3:  # Need at least 3 months of historical data
@@ -69,11 +69,11 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
         
         # Set up time series
         location_data.set_index('month', inplace=True)
-        ts = location_data['lead_count']
+        ts = location_data['Leads']
         
         # Get last actual data point and determine forecast needs
-        last_actual_month = prediction_month - 1  # Changed: Always use month before prediction
-        months_ahead = 1  # Changed: Always predict one month ahead
+        last_actual_month = prediction_month - 1
+        months_ahead = 1
         
         # Get training data (all data up to but not including prediction month)
         training_data = ts[ts.index <= last_actual_month]
@@ -101,33 +101,45 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
             conf_int_95 = np.maximum(conf_int_95, 0)
             conf_int_50 = np.maximum(conf_int_50, 0)
             
-            # Get running total for current month
-            current_month_data = df_monthly[
-                (df_monthly['Media_Location_Text__c'] == location) &
-                (df_monthly['month'] == prediction_month)
-            ]
-            current_month_total = int(current_month_data['lead_count'].sum()) if not current_month_data.empty else 0
-            
             # Get previous month
             previous_month = prediction_month - 1
             previous_month_data = ts[ts.index == previous_month]
-            previous_month_value = int(previous_month_data.iloc[0]) if not previous_month_data.empty else 0
             
-            # Determine if previous month is actual or predicted
-            previous_month_label = "Predicted" if previous_month > current_month else "Actual"
+            # Only consider it actual data if it's in or before the current month
+            is_actual = previous_month <= current_month
+            previous_month_label = "Actual" if is_actual else "Predicted"
+            
+            # Only use previous month data if it's actual, otherwise use None
+            if is_actual and not previous_month_data.empty:
+                previous_month_value = int(previous_month_data.iloc[0])
+            else:
+                previous_month_value = None
             
             # Store results
-            forecast_results.append({
+            result_dict = {
                 'Location': location,
                 'Month': prediction_month.strftime('%Y-%m'),
                 'Predicted_Monthly_Leads': int(forecast.iloc[0]),
                 'Lower_Bound_95': int(conf_int_95.iloc[0, 0]),
                 'Upper_Bound_95': int(conf_int_95.iloc[0, 1]),
                 'Lower_Bound_50': int(conf_int_50.iloc[0, 0]),
-                'Upper_Bound_50': int(conf_int_50.iloc[0, 1]),
-                f'{previous_month.strftime("%B %Y")}_{previous_month_label}': previous_month_value,
-                f'{prediction_month.strftime("%B %Y")}_Running_Total': current_month_total
-            })
+                'Upper_Bound_50': int(conf_int_50.iloc[0, 1])
+            }
+            
+            # Only add previous month data if we have an actual value
+            if previous_month_value is not None:
+                result_dict[f'{previous_month.strftime("%B %Y")}_{previous_month_label}'] = previous_month_value
+            
+            # Only add running total if we're forecasting the current month
+            if prediction_month == current_month:
+                current_month_data = df_monthly[
+                    (df_monthly['Media_Location_Text__c'] == location) &
+                    (df_monthly['month'] == prediction_month)
+                ]
+                running_total = int(current_month_data['Leads'].sum()) if not current_month_data.empty else 0
+                result_dict[f'{prediction_month.strftime("%B %Y")}_Running_Total'] = running_total
+            
+            forecast_results.append(result_dict)
             
             # Create visualization
             plt.figure(figsize=(16, 6))

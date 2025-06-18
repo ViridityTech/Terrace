@@ -25,6 +25,7 @@ def get_valid_locations():
         'Boise',
         'Chicago',
         'Coeur d\'Alene',
+        'Coeur dAlene',
         'Crystal Lake',
         'Eau Claire',
         'Elgin',
@@ -40,8 +41,21 @@ def get_valid_locations():
         'Urbandale',
         'Warrenville',
         'Weldon Spring',
-        'West Madison'
+        'West Madison',
+        'Geneva/St.Charles',
+        'Warrenville/Naperville',
+        'Chicago/Irving Park'
     ]
+
+def map_location_name(location):
+    """Map location names to their standardized forms"""
+    location_mapping = {
+        'Geneva/St.Charles': 'Geneva',
+        'Warrenville/Naperville': 'Warrenville',
+        'Chicago/Irving Park': 'Chicago',
+        'Coeur dAlene': 'Coeur d\'Alene'
+    }
+    return location_mapping.get(location, location)
 
 def get_leads_for_month(sf, start_date, end_date):
     valid_locations = get_valid_locations()
@@ -49,20 +63,38 @@ def get_leads_for_month(sf, start_date, end_date):
     escaped_locations = [loc.replace("'", "\\'") for loc in valid_locations]
     location_filter = "', '".join(escaped_locations)
     
-    soql_query = f"""
-    SELECT
+    # Update query to include Status field and filter by correct API names
+    query = f"""
+    SELECT 
+        Id,
+        CreatedDate, 
         Media_Location_Text__c,
-        DAY_ONLY(pi__created_date__c) day_created,
-        COUNT(Id) lead_count
+        Status
     FROM Lead
-    WHERE pi__created_date__c >= {start_date}
-        AND pi__created_date__c < {end_date}
-        AND Media_Location_Text__c IN ('{location_filter}')
-    GROUP BY Media_Location_Text__c, DAY_ONLY(pi__created_date__c)
-    ORDER BY Media_Location_Text__c, DAY_ONLY(pi__created_date__c)
+    WHERE 
+        CreatedDate >= {start_date} AND 
+        CreatedDate <= {end_date} AND
+        Media_Location_Text__c IN ('{location_filter}') AND
+        Status IN ('Unqualified Lead', 'Converted', 'Client Registration', 'TOF Waitlist', 'Future Prospect', 'Prospect Connect')
+    ORDER BY 
+        CreatedDate ASC
     """
-    print(f"Querying data for period: {start_date} to {end_date}")
-    return sf.query(soql_query)
+    
+    try:
+        result = sf.query_all(query)
+        df = pd.DataFrame(result['records'])
+        if not df.empty:
+            # Add a count column for aggregation
+            df['Leads'] = 1
+            # Map location names to standardized forms
+            df['Media_Location_Text__c'] = df['Media_Location_Text__c'].apply(map_location_name)
+            # Ensure Id is preserved
+            if 'Id' in df.columns:
+                df = df[['Id', 'CreatedDate', 'Media_Location_Text__c', 'Status', 'Leads']]
+        return df
+    except Exception as e:
+        print(f"Query error: {str(e)}")
+        return pd.DataFrame()
 
 def get_date_ranges(prediction_month=None):
     # Get target month for prediction
@@ -95,27 +127,41 @@ def get_salesforce_data(username, password, security_token, prediction_month=Non
     if sf is None:
         return None, error
     
-    # Initialize empty list to store all records
-    all_records = []
+    # Initialize empty list to store all DataFrames
+    all_dfs = []
     
     # Query each month and combine results
     for start_date, end_date in get_date_ranges(prediction_month):
         query_results = get_leads_for_month(sf, start_date, end_date)
-        all_records.extend(query_results['records'])
+        if not query_results.empty:
+            all_dfs.append(query_results)
     
-    # Convert to DataFrame
-    df = pd.DataFrame(all_records)
+    if not all_dfs:
+        print("No data retrieved from Salesforce")
+        return None, "No data retrieved from Salesforce"
+    
+    # Combine all DataFrames
+    df = pd.concat(all_dfs, ignore_index=True)
     
     # Remove the extra 'attributes' column if present
     if 'attributes' in df.columns:
         df = df.drop(columns='attributes')
     
+    # Filter for only Leads (Future Prospect, Converted, Client Registration, TOF Waitlist)
+    df = df[df['Status'].isin(['Future Prospect', 'Converted', 'Client Registration', 'TOF Waitlist'])]
+    
+    # Group by date and location
+    df['day_created'] = pd.to_datetime(df['CreatedDate']).dt.date
+    
+    # Aggregate counts by date and location while preserving Id
+    result_df = df.groupby(['day_created', 'Media_Location_Text__c', 'Id'])['Leads'].sum().reset_index()
+    
     print("\nGrouped lead counts by location & date:")
-    print(df)
+    print(result_df)
     
     # Save Results to CSV
     output_file = "leads_by_location_date.csv"
-    df.to_csv(output_file, index=False)
+    result_df.to_csv(output_file, index=False)
     print(f"\nSaved results to {output_file}")
     
-    return output_file, None 
+    return output_file, None

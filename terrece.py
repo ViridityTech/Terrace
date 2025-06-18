@@ -6,6 +6,8 @@ import zipfile
 import os
 from datetime import datetime
 import io
+import configparser
+import os.path
 
 def create_download_zip(forecast_results, visuals_dir):
     """Create a ZIP file containing forecast results and visualizations"""
@@ -113,7 +115,7 @@ def generate_chain_forecast(output_file, selected_date, selected_location):
                         new_row = {
                             'Media_Location_Text__c': location,
                             'day_created': day_date,
-                            'lead_count': leads_per_day
+                            'Leads': leads_per_day
                         }
                         temp_df = pd.concat([temp_df, pd.DataFrame([new_row])], ignore_index=True)
                 
@@ -147,6 +149,30 @@ def generate_chain_forecast(output_file, selected_date, selected_location):
     
     return final_results
 
+# Function to load credentials from file
+def load_credentials():
+    creds = {
+        "username": "",
+        "password": "",
+        "security_token": ""
+    }
+    
+    # Check if credentials file exists
+    if os.path.isfile('credentials.ini'):
+        config = configparser.ConfigParser()
+        config.read('credentials.ini')
+        
+        if 'salesforce' in config:
+            sf_config = config['salesforce']
+            creds["username"] = sf_config.get('username', '')
+            creds["password"] = sf_config.get('password', '')
+            creds["security_token"] = sf_config.get('security_token', '')
+            
+    return creds
+
+# Load credentials at startup
+credentials = load_credentials()
+
 def main():
     st.set_page_config(page_title="Terrece - Orchard's Lead Forecasting Agent", layout="wide")
     
@@ -163,13 +189,20 @@ def main():
     # Create a sidebar for Salesforce credentials
     st.sidebar.header("Salesforce Authentication")
     
-    # Add credential input fields in the sidebar
-    sf_username = st.sidebar.text_input("Salesforce Username", placeholder="example@company.com")
-    sf_password = st.sidebar.text_input("Salesforce Password", type="password")
-    sf_token = st.sidebar.text_input("Salesforce Security Token", type="password")
+    # Pre-populate fields with values from credentials file if available
+    username = st.sidebar.text_input("Username", value=credentials["username"])
+    password = st.sidebar.text_input("Password", value=credentials["password"], type="password")
+    security_token = st.sidebar.text_input("Security Token", value=credentials["security_token"], type="password")
     
-    # Add a note about security
-    st.sidebar.info("Your credentials are used only for authentication and are not stored anywhere.")
+    # Display a message if credentials were loaded from file
+    if credentials["username"] and credentials["password"] and credentials["security_token"]:
+        st.sidebar.success("Test credentials loaded from credentials.ini")
+    
+    # Add debug mode in the sidebar
+    with st.sidebar:
+        st.title("Settings")
+        debug_mode = st.toggle("Debug Mode", value=False, help="Enable to see detailed lead data")
+        st.session_state['debug_mode'] = debug_mode
     
     # Date selection
     available_dates = pd.date_range(
@@ -196,13 +229,13 @@ def main():
     
     if st.button("Generate Forecast"):
         # Validate credentials are provided
-        if not sf_username or not sf_password or not sf_token:
+        if not username or not password or not security_token:
             st.error("Please provide your Salesforce credentials in the sidebar before generating a forecast.")
             return
         
         with st.spinner("Authenticating with Salesforce and fetching data..."):
             # Get data from Salesforce with provided credentials
-            output_file, error = get_salesforce_data(sf_username, sf_password, sf_token, selected_date)
+            output_file, error = get_salesforce_data(username, password, security_token, selected_date)
             
             if error:
                 st.error(f"Authentication failed: {error}")
@@ -211,6 +244,55 @@ def main():
             if not output_file:
                 st.error("Failed to retrieve data from Salesforce.")
                 return
+            
+            # Display debug information if debug mode is enabled
+            if debug_mode:
+                st.header("Debug Information")
+                st.subheader("Detailed Lead Data")
+                
+                # Sort data by location and date
+                debug_df = pd.read_csv(output_file).copy()
+                debug_df['day_created'] = pd.to_datetime(debug_df['day_created'])
+                debug_df = debug_df.sort_values(['Media_Location_Text__c', 'day_created'])
+                
+                # Display data for each location
+                for location in debug_df['Media_Location_Text__c'].unique():
+                    with st.expander(f"Lead data for {location}"):
+                        location_data = debug_df[debug_df['Media_Location_Text__c'] == location]
+                        
+                        # Show summary statistics
+                        st.write(f"Total leads: {len(location_data)}")
+                        st.write(f"Date range: {location_data['day_created'].min().strftime('%Y-%m-%d')} to {location_data['day_created'].max().strftime('%Y-%m-%d')}")
+                        
+                        # Display each lead as its own row with Lead ID
+                        # Ensure the table includes all available columns
+                        # Format the DataFrame to show necessary columns first
+                        
+                        # Reorder columns to put important ones first
+                        columns_to_show = ['Id', 'day_created', 'Leads', 'Media_Location_Text__c']
+                        
+                        # Add any other columns that exist in the DataFrame
+                        other_columns = [col for col in location_data.columns if col not in columns_to_show]
+                        display_columns = columns_to_show + other_columns
+                        
+                        # Filter to only include columns that actually exist
+                        display_columns = [col for col in display_columns if col in location_data.columns]
+                        
+                        # Format date for better readability
+                        if 'day_created' in location_data.columns:
+                            location_data['day_created'] = location_data['day_created'].dt.strftime('%Y-%m-%d')
+                        
+                        # Display the detailed data
+                        st.dataframe(location_data[display_columns])
+                        
+                        # Add download button for this location's data
+                        csv = location_data.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label=f"Download {location} leads CSV",
+                            data=csv,
+                            file_name=f"{location}_leads.csv",
+                            mime="text/csv"
+                        )
             
             # Use chain forecasting for future months
             forecast_results = generate_chain_forecast(output_file, selected_date, selected_location)
