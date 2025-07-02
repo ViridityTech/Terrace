@@ -198,6 +198,16 @@ def main():
     if credentials["username"] and credentials["password"] and credentials["security_token"]:
         st.sidebar.success("Test credentials loaded from credentials.ini")
     
+    # Forecast Adjustment input
+    forecast_adjustment = st.sidebar.number_input(
+        label="Forecast Adjustment (0-1)",
+        min_value=0.0,
+        max_value=1.0,
+        value=1.0,
+        step=0.01,
+        help="Multiply all forecast results by this factor (e.g., 0.8 for 80%)"
+    )
+    
     # Add debug mode in the sidebar
     with st.sidebar:
         st.title("Settings")
@@ -297,7 +307,13 @@ def main():
             # Use chain forecasting for future months
             forecast_results = generate_chain_forecast(output_file, selected_date, selected_location)
             
+            # Apply forecast adjustment at the very last step
             if forecast_results is not None:
+                # List of columns to adjust (all int/float columns except 'Location' and 'Month')
+                cols_to_adjust = [col for col in forecast_results.columns if col not in ['Location', 'Month'] and pd.api.types.is_numeric_dtype(forecast_results[col])]
+                for col in cols_to_adjust:
+                    forecast_results[col] = (forecast_results[col] * forecast_adjustment).apply(lambda x: int(x // 1))
+
                 # Display results
                 st.subheader("Forecast Results")
                 st.dataframe(forecast_results)
