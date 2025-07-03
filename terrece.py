@@ -25,7 +25,7 @@ def create_download_zip(forecast_results, visuals_dir):
         
         return zip_buffer.getvalue()
 
-def generate_chain_forecast(output_file, selected_date, selected_location):
+def generate_chain_forecast(output_file, selected_date, selected_location, adjustment_factor: float = 1.0):
     """Generate forecasts for future months by creating a chain of predictions"""
     # Convert selected date to datetime
     target_date = pd.to_datetime(selected_date)
@@ -33,7 +33,7 @@ def generate_chain_forecast(output_file, selected_date, selected_location):
     
     # If target date is current month or past, just do a regular forecast
     if target_date.year < current_date.year or (target_date.year == current_date.year and target_date.month <= current_date.month):
-        return forecast_leads(output_file, selected_date, selected_location)
+        return forecast_leads(output_file, selected_date, selected_location, adjustment_factor=adjustment_factor)
     
     # We need to forecast intermediate months
     st.info(f"Generating predicted intermediary forecasts from {current_date.strftime('%B %Y')} to {target_date.strftime('%B %Y')}")
@@ -75,7 +75,7 @@ def generate_chain_forecast(output_file, selected_date, selected_location):
         st.write(f"Generating predicted forecast for {month.strftime('%B %Y')}...")
         
         # Generate forecast for this month
-        forecast_results = forecast_leads(output_file, month_str, selected_location)
+        forecast_results = forecast_leads(output_file, month_str, selected_location, adjustment_factor=adjustment_factor)
         
         # Debug information for Bettendorf
         if forecast_results is not None and 'Bettendorf' in forecast_results['Location'].values:
@@ -139,7 +139,7 @@ def generate_chain_forecast(output_file, selected_date, selected_location):
             st.error(f"No forecast generated for {selected_location} in {target_date.strftime('%B %Y')}.")
             # Try to generate a direct forecast for the location
             st.write(f"Attempting direct forecast for {selected_location}...")
-            direct_forecast = forecast_leads(output_file, selected_date, selected_location)
+            direct_forecast = forecast_leads(output_file, selected_date, selected_location, adjustment_factor=adjustment_factor)
             if direct_forecast is not None and selected_location in direct_forecast['Location'].values:
                 st.success(f"Direct forecast for {selected_location} successful!")
                 final_results = direct_forecast
@@ -305,33 +305,23 @@ def main():
                         )
             
             # Use chain forecasting for future months
-            forecast_results = generate_chain_forecast(output_file, selected_date, selected_location)
+            forecast_results = generate_chain_forecast(output_file, selected_date, selected_location, adjustment_factor=forecast_adjustment)
             
             if forecast_results is not None:
-                # Preserve original predictions before adjustment for debug comparison
-                forecast_results_original = forecast_results.copy()
-                # Apply forecast adjustment at the very last step
-                # List of columns to adjust (all int/float columns except 'Location' and 'Month')
-                cols_to_adjust = [col for col in forecast_results.columns if col not in ['Location', 'Month'] and pd.api.types.is_numeric_dtype(forecast_results[col])]
-                for col in cols_to_adjust:
-                    forecast_results[col] = (forecast_results[col] * forecast_adjustment).apply(lambda x: int(x // 1))
-
                 # Display results
                 st.subheader("Forecast Results")
                 st.dataframe(forecast_results)
-                
-                # Debug: Show original vs adjusted predictions
-                if debug_mode:
+
+                # Debug comparison of original vs adjusted
+                if debug_mode and 'Original_Predicted_Monthly_Leads' in forecast_results.columns:
                     st.subheader("Forecast Adjustment Debug")
-                    # Build comparison DataFrame for main prediction column
-                    if 'Predicted_Monthly_Leads' in forecast_results.columns:
-                        debug_df = pd.DataFrame({
-                            'Location': forecast_results['Location'],
-                            'Month': forecast_results['Month'],
-                            'Original_Predicted_Leads': forecast_results_original['Predicted_Monthly_Leads'],
-                            'Adjusted_Predicted_Leads': forecast_results['Predicted_Monthly_Leads']
-                        })
-                        st.dataframe(debug_df)
+                    debug_df = forecast_results[[
+                        'Location', 'Month', 'Original_Predicted_Monthly_Leads', 'Predicted_Monthly_Leads'
+                    ]].rename(columns={
+                        'Original_Predicted_Monthly_Leads': 'Original_Predicted_Leads',
+                        'Predicted_Monthly_Leads': 'Adjusted_Predicted_Leads'
+                    })
+                    st.dataframe(debug_df)
                 
                 # Display visualizations
                 st.subheader("Forecast Visualizations")

@@ -22,7 +22,7 @@ def prepare_data(df):
     
     return monthly_data
 
-def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=None, selected_location=None):
+def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=None, selected_location=None, adjustment_factor: float = 1.0):
     """Main forecasting function"""
     output_dir = "forecast_results"
     visuals_dir = "forecast_visuals"
@@ -91,10 +91,19 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
             conf_int_log_95 = model_fit.get_forecast(steps=1).conf_int(alpha=0.05)
             conf_int_log_50 = model_fit.get_forecast(steps=1).conf_int(alpha=0.50)
             
-            # Transform predictions back to original scale and round to integers
+            # Transform predictions back to original scale as integers
             forecast = np.round(np.expm1(forecast_log)).astype(int)
             conf_int_95 = np.round(np.expm1(conf_int_log_95)).astype(int)
             conf_int_50 = np.round(np.expm1(conf_int_log_50)).astype(int)
+            
+            # Preserve original forecast before any adjustment
+            original_forecast_value = int(forecast.iloc[0])
+            
+            # Apply adjustment factor (floor to int)
+            if adjustment_factor != 1.0:
+                forecast = np.floor(forecast * adjustment_factor).astype(int)
+                conf_int_95 = np.floor(conf_int_95 * adjustment_factor).astype(int)
+                conf_int_50 = np.floor(conf_int_50 * adjustment_factor).astype(int)
             
             # Ensure predictions are non-negative integers
             forecast = np.maximum(forecast, 0)
@@ -119,6 +128,7 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
             result_dict = {
                 'Location': location,
                 'Month': prediction_month.strftime('%Y-%m'),
+                'Original_Predicted_Monthly_Leads': original_forecast_value,
                 'Predicted_Monthly_Leads': int(forecast.iloc[0]),
                 'Lower_Bound_95': int(conf_int_95.iloc[0, 0]),
                 'Upper_Bound_95': int(conf_int_95.iloc[0, 1]),
