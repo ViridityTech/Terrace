@@ -307,8 +307,10 @@ def main():
             # Use chain forecasting for future months
             forecast_results = generate_chain_forecast(output_file, selected_date, selected_location)
             
-            # Apply forecast adjustment at the very last step
             if forecast_results is not None:
+                # Preserve original predictions before adjustment for debug comparison
+                forecast_results_original = forecast_results.copy()
+                # Apply forecast adjustment at the very last step
                 # List of columns to adjust (all int/float columns except 'Location' and 'Month')
                 cols_to_adjust = [col for col in forecast_results.columns if col not in ['Location', 'Month'] and pd.api.types.is_numeric_dtype(forecast_results[col])]
                 for col in cols_to_adjust:
@@ -317,6 +319,19 @@ def main():
                 # Display results
                 st.subheader("Forecast Results")
                 st.dataframe(forecast_results)
+                
+                # Debug: Show original vs adjusted predictions
+                if debug_mode:
+                    st.subheader("Forecast Adjustment Debug")
+                    # Build comparison DataFrame for main prediction column
+                    if 'Predicted_Monthly_Leads' in forecast_results.columns:
+                        debug_df = pd.DataFrame({
+                            'Location': forecast_results['Location'],
+                            'Month': forecast_results['Month'],
+                            'Original_Predicted_Leads': forecast_results_original['Predicted_Monthly_Leads'],
+                            'Adjusted_Predicted_Leads': forecast_results['Predicted_Monthly_Leads']
+                        })
+                        st.dataframe(debug_df)
                 
                 # Display visualizations
                 st.subheader("Forecast Visualizations")
