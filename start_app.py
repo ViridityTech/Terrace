@@ -8,6 +8,17 @@ import sys
 import os
 import argparse
 
+# Import version info
+try:
+    from version import VERSION_INFO
+except ImportError:
+    VERSION_INFO = {
+        "version": "unknown",
+        "commit_date": "unknown", 
+        "commit_hash": "unknown",
+        "build_time": "unknown"
+    }
+
 def check_requirements():
     """Check if all required packages are installed"""
     try:
@@ -31,6 +42,11 @@ def start_streamlit_app(port=8503, host="0.0.0.0"):
     print(f"📍 Host: {host}")
     print(f"🔌 Port: {port}")
     print(f"🌐 Access URL: http://{host}:{port}")
+    print(f"📦 Version: {VERSION_INFO['version']}")
+    print(f"📅 Commit Date: {VERSION_INFO['commit_date']}")
+    print(f"🔗 Commit Hash: {VERSION_INFO['commit_hash']}")
+    print(f"🕐 Build Time: {VERSION_INFO['build_time']}")
+    print("=" * 60)
     
     # Ensure required directories exist
     os.makedirs("forecast_results", exist_ok=True)

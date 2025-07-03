@@ -305,6 +305,7 @@ def main():
                         )
             
             # Use chain forecasting for future months
+            print(f"DEBUG: Passing forecast_adjustment value: {forecast_adjustment}")
             forecast_results = generate_chain_forecast(output_file, selected_date, selected_location, adjustment_factor=forecast_adjustment)
             
             if forecast_results is not None:

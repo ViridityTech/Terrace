@@ -100,10 +100,16 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
             original_forecast_value = int(forecast.iloc[0])
             
             # Apply adjustment factor (floor to int)
+            print(f"DEBUG: Original forecast: {original_forecast_value}, Adjustment factor: {adjustment_factor}")
             if adjustment_factor != 1.0:
+                print(f"DEBUG: Applying adjustment factor {adjustment_factor} to forecast values")
+                print(f"DEBUG: Before adjustment - forecast: {forecast.iloc[0]}, conf_95: [{conf_int_95.iloc[0, 0]}, {conf_int_95.iloc[0, 1]}], conf_50: [{conf_int_50.iloc[0, 0]}, {conf_int_50.iloc[0, 1]}]")
                 forecast = np.floor(forecast * adjustment_factor).astype(int)
                 conf_int_95 = np.floor(conf_int_95 * adjustment_factor).astype(int)
                 conf_int_50 = np.floor(conf_int_50 * adjustment_factor).astype(int)
+                print(f"DEBUG: After adjustment - forecast: {forecast.iloc[0]}, conf_95: [{conf_int_95.iloc[0, 0]}, {conf_int_95.iloc[0, 1]}], conf_50: [{conf_int_50.iloc[0, 0]}, {conf_int_50.iloc[0, 1]}]")
+            else:
+                print(f"DEBUG: No adjustment applied (factor = 1.0)")
             
             # Ensure predictions are non-negative integers
             forecast = np.maximum(forecast, 0)
