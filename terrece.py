@@ -39,7 +39,7 @@ def generate_chain_forecast(output_file, selected_date, selected_location, adjus
     st.info(f"Generating predicted intermediary forecasts from {current_date.strftime('%B %Y')} to {target_date.strftime('%B %Y')}")
     
     # Start with current month's data
-    current_month = pd.Period(current_date, freq='M')
+    current_month = pd.Period(current_date, freq='ME')
     
     # Create a temporary dataframe to store our data
     temp_df = pd.read_csv(output_file)
@@ -56,7 +56,7 @@ def generate_chain_forecast(output_file, selected_date, selected_location, adjus
     # Generate forecasts for each month between current and target
     months_to_forecast = []
     month_iter = current_month
-    target_month = pd.Period(target_date, freq='M')
+    target_month = pd.Period(target_date, freq='ME')
     
     st.write(f"Will forecast from {current_month} to {target_month}")
     
@@ -218,7 +218,7 @@ def main():
     available_dates = pd.date_range(
         start='2025-01',
         periods=12,
-        freq='M'
+        freq='ME'
     )
     selected_date = st.selectbox(
         "Select prediction month",

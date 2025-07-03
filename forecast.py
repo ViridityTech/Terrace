@@ -9,7 +9,7 @@ def prepare_data(df):
     """Prepare the data for forecasting"""
     # Convert day_created to datetime and extract month
     df['day_created'] = pd.to_datetime(df['day_created'])
-    df['month'] = df['day_created'].dt.to_period('M')
+    df['month'] = df['day_created'].dt.to_period('ME')
     
     # Group by location and month and ensure integer counts
     monthly_data = df.groupby(['Media_Location_Text__c', 'month'])['Leads'].sum().round().astype(int).reset_index()
@@ -35,12 +35,12 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
     
     # Get prediction month or default to current month
     if prediction_month is None:
-        prediction_month = pd.Timestamp.now().to_period('M')
+        prediction_month = pd.Timestamp.now().to_period('ME')
     else:
         prediction_month = pd.Period(prediction_month)
     
     # Get current month to determine if we're forecasting future months
-    current_month = pd.Timestamp.now().to_period('M')
+    current_month = pd.Timestamp.now().to_period('ME')
     is_future_month = prediction_month > current_month
     
     forecast_results = []
@@ -83,7 +83,7 @@ def forecast_leads(input_file="leads_by_location_date.csv", prediction_month=Non
             ts_log = np.log1p(training_data)
             
             # Fit ARIMA model on log-transformed data
-            model = ARIMA(ts_log, order=(1,1,1), freq='M')
+            model = ARIMA(ts_log, order=(1,1,1), freq='ME')
             model_fit = model.fit()
             
             # Generate forecast for prediction month
