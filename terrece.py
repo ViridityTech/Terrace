@@ -228,11 +228,11 @@ def main():
     
     # Location selection
     location_options = ['All Locations'] + [
-        'Ankeny', 'Beloit', 'Bettendorf', 'Boise', 'Chicago',
-        'Coeur d\'Alene', 'Crystal Lake', 'Eau Claire', 'Elgin',
-        'Fond du Lac', 'Geneva', 'Iowa City', 'Lake Geneva',
-        'Meridian', 'Moorhead', 'Nampa', 'Rolling Meadows',
-        'Spokane', 'Urbandale', 'Warrenville', 'Weldon Spring',
+        'Ankeny', 'Bettendorf', 'Boise', 'Chesterfield', 'Chicago',
+        'Coeur d\'Alene', 'Crystal Lake', 'De Pere', 'Eau Claire', 'Elgin',
+        'Geneva', 'Iowa City', 'Janesville', 'LaCrosse', 'Lake Geneva',
+        'Mequon', 'Meridian', 'Nampa', 'Oakville', 'Pewaukee', 'Rolling Meadows',
+        'St. Cloud', 'Urbandale', 'Warrenville', 'Weldon Spring',
         'West Madison'
     ]
     selected_location = st.selectbox("Select location", location_options)
